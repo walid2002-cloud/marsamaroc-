@@ -10,7 +10,7 @@ body {
 }
 
 .page {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 40px auto;
   padding: 0 16px;
   display: grid;
@@ -66,4 +66,123 @@ button:disabled {
 
 .error {
   color: #b91c1c;
+}
+
+.muted {
+  color: #64748b;
+}
+
+.secondary-btn {
+  background: #0f766e;
+}
+
+.danger-btn {
+  background: #b91c1c;
+  color: #fff;
+}
+
+.danger-btn:hover {
+  filter: brightness(1.05);
+}
+
+.users-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.user-item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.qr-block {
+  display: grid;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.qr-block img {
+  width: 170px;
+  height: 170px;
+  object-fit: contain;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 6px;
+  background: #ffffff;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+select {
+  padding: 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+}
+
+.table-wrap {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+th,
+td {
+  border: 1px solid #e2e8f0;
+  text-align: left;
+  padding: 10px;
+  vertical-align: top;
+}
+
+th {
+  background: #f8fafc;
+}
+
+.chat-box {
+  display: grid;
+  gap: 12px;
+}
+
+.messages {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 12px;
+  min-height: 220px;
+  display: grid;
+  gap: 8px;
+}
+
+.msg {
+  padding: 10px;
+  border-radius: 8px;
+}
+
+.msg.user {
+  background: #dbeafe;
+}
+
+.msg.assistant {
+  background: #dcfce7;
+}
+
+.chat-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 10px;
+}
+
+.mode-switch {
+  display: flex;
+  gap: 10px;
 }
