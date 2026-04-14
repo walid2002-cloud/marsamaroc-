@@ -1,0 +1,68 @@
+services:
+  mysql:
+    image: mysql:8
+    container_name: marsa-mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: Root1234!
+      MYSQL_DATABASE: marsa_ai
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./docker/mysql/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-pRoot1234!"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: marsa-backend
+    restart: unless-stopped
+    environment:
+      PORT: 3000
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: Root1234!
+      DB_NAME: marsa_ai
+      BASE_URL: ${BASE_URL:-}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
+      # Défaut sûr ; pour QR mobile sans ngrok, ouvre l’admin via http://IP_DU_MAC:5173
+      # ou définis BASE_URL / FRONTEND_BASE_URL dans un .env à la racine.
+      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
+      LLAMA_CPP_URL: http://host.docker.internal:8080
+      NODE_ENV: ${NODE_ENV:-development}
+      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
+      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
+      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
+      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
+      QR_OTP_SMS_DOMAIN: ${QR_OTP_SMS_DOMAIN:-}
+      QR_OTP_PEPPER: ${QR_OTP_PEPPER:-}
+      QR_OTP_ENABLE_SMS: ${QR_OTP_ENABLE_SMS:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: marsa-frontend
+    restart: unless-stopped
+    environment:
+      # Cible du proxy Vite /api → backend (nom du service Docker)
+      DEV_PROXY_TARGET: http://backend:3000
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
