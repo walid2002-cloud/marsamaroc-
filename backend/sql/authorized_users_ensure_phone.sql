@@ -1,6 +1,0 @@
--- Schéma attendu par le backend actuel :
---   full_name VARCHAR(...)
---   phone_number VARCHAR(...)
---
--- Si besoin d’ajouter phone_number :
--- ALTER TABLE authorized_users ADD COLUMN phone_number VARCHAR(20) NOT NULL DEFAULT '' AFTER full_name;

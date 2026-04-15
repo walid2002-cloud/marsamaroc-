@@ -30,22 +30,15 @@ services:
       DB_USER: root
       DB_PASSWORD: Root1234!
       DB_NAME: marsa_ai
-      BASE_URL: ${BASE_URL:-}
-      PUBLIC_APP_URL: ${PUBLIC_APP_URL:-}
-      # Défaut sûr ; pour QR mobile sans ngrok, ouvre l’admin via http://IP_DU_MAC:5173
-      # ou définis BASE_URL / FRONTEND_BASE_URL dans un .env à la racine.
-      FRONTEND_BASE_URL: ${FRONTEND_BASE_URL:-http://localhost:5173}
       LLAMA_CPP_URL: http://host.docker.internal:8080
       NODE_ENV: ${NODE_ENV:-development}
-      TWILIO_ACCOUNT_SID: ${TWILIO_ACCOUNT_SID:-}
-      TWILIO_AUTH_TOKEN: ${TWILIO_AUTH_TOKEN:-}
-      TWILIO_FROM_NUMBER: ${TWILIO_FROM_NUMBER:-}
-      TWILIO_MESSAGING_SERVICE_SID: ${TWILIO_MESSAGING_SERVICE_SID:-}
-      QR_OTP_SMS_DOMAIN: ${QR_OTP_SMS_DOMAIN:-}
-      QR_OTP_PEPPER: ${QR_OTP_PEPPER:-}
-      QR_OTP_ENABLE_SMS: ${QR_OTP_ENABLE_SMS:-}
+      WWEBJS_AUTH_PATH: /app/.wwebjs_auth
+      UPLOAD_DIR: /app/uploads/bot-sources
     ports:
       - "3000:3000"
+    volumes:
+      - backend_whatsapp_auth:/app/.wwebjs_auth
+      - backend_uploads:/app/uploads/bot-sources
     depends_on:
       mysql:
         condition: service_healthy
@@ -66,3 +59,5 @@ services:
 
 volumes:
   mysql_data:
+  backend_whatsapp_auth:
+  backend_uploads:

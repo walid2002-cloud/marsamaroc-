@@ -28,8 +28,8 @@ class RootErrorBoundary extends Component {
         >
           <h1 style={{ fontSize: "1.25rem" }}>L’application n’a pas pu s’afficher</h1>
           <p style={{ color: "#64748b", marginTop: 8 }}>
-            Souvent : mauvaise URL (il faut le lien complet du QR avec{" "}
-            <code>/qr-connect</code>), ou navigateur trop ancien. Détail technique :
+            Une erreur frontend est survenue. Rechargez la page et vérifiez la
+            configuration de l’API backend. Détail technique :
           </p>
           <pre
             style={{

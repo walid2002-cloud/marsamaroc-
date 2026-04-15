@@ -1,3 +1,202 @@
+# Marsa Maroc AI - Bot-Centric Admin Platform
+
+Plateforme d'administration de **bots IA métier** connectés à WhatsApp via `whatsapp-web.js`.
+
+## Nouveau concept (v2)
+
+Ce projet n'est plus centré sur des utilisateurs finaux authentifiés par QR/OTP.
+
+Le produit est désormais organisé autour de **bots**:
+
+- chaque bot a un domaine métier (ex: Commerce, Conteneur, Logistique),
+- chaque bot a sa propre session WhatsApp,
+- chaque bot a ses propres sources et chunks de connaissance,
+- chaque bot conserve ses conversations/messages indépendamment des autres bots.
+
+Le QR affiché dans l'admin sert uniquement à connecter WhatsApp Web pour le bot.
+
+---
+
+## Stack
+
+- Backend: Node.js + Express
+- Frontend: React + Vite
+- DB: MySQL 8
+- WhatsApp: `whatsapp-web.js`
+- IA: orchestrateur prêt pour llama.cpp (`LLAMA_CPP_URL`)
+- DevOps: Docker / docker-compose
+
+---
+
+## Arborescence (principale)
+
+```text
+backend/
+  controllers/
+  middlewares/
+  models/
+  routes/
+  services/
+  sql/
+  utils/
+  server.js
+frontend/
+  src/
+    components/
+    App.jsx
+    main.jsx
+docker/
+  mysql/
+    init.sql
+docker-compose.yml
+```
+
+---
+
+## Schéma DB principal
+
+Tables bot-centric:
+
+- `admins`
+- `bots`
+- `bot_sources`
+- `bot_whatsapp_sessions`
+- `bot_conversations`
+- `bot_messages`
+- `bot_knowledge_chunks`
+- `bot_api_logs`
+
+Le script de référence:
+
+- `docker/mysql/init.sql`
+- `backend/sql/bot_platform.sql`
+
+---
+
+## Variables d'environnement
+
+### Backend (`backend/.env` ou variables Docker)
+
+Voir `backend/.env.example`.
+
+Variables essentielles:
+
+- `PORT=3000`
+- `DB_HOST=mysql` (avec docker-compose)
+- `DB_PORT=3306`
+- `DB_USER=root`
+- `DB_PASSWORD=Root1234!`
+- `DB_NAME=marsa_ai`
+- `LLAMA_CPP_URL=http://host.docker.internal:8080` (ou autre endpoint local)
+- `WWEBJS_AUTH_PATH=/app/.wwebjs_auth`
+- `UPLOAD_DIR=/app/uploads/bot-sources`
+
+### Frontend
+
+En dev Docker/Vite, l'API passe via proxy (`/api` -> backend), rien de spécial à configurer.
+
+Pour build statique hors proxy:
+
+- `VITE_API_BASE_URL=https://api.example.com`
+
+---
+
+## Lancement avec Docker
+
+```bash
+cd /Users/walidboudarra/Desktop/marsamaroc-
+docker compose up -d --build
+```
+
+Services:
+
+- Front: `http://localhost:5173`
+- API: `http://localhost:3000`
+- Health: `http://localhost:3000/health`
+
+---
+
+## Workflow admin (résumé)
+
+1. Se connecter admin (`admin@marsa.ma` / `Admin1234` si seed initial).
+2. Créer un bot (nom, domaine, guardrails).
+3. Ouvrir la section Bots et cliquer **Connecter WhatsApp**.
+4. Scanner le QR généré avec WhatsApp.
+5. Ajouter des sources au bot:
+   - texte,
+   - PDF,
+   - API.
+6. Le bot reçoit les messages WhatsApp, applique ses guardrails/domain, répond et enregistre l'historique.
+
+---
+
+## Endpoints REST (v2)
+
+Base: `/api`
+
+### Admin
+
+- `POST /api/admin/login`
+
+### Bots
+
+- `POST /api/bots`
+- `GET /api/bots`
+- `GET /api/bots/:id`
+- `PUT /api/bots/:id`
+- `PATCH /api/bots/:id/status`
+- `DELETE /api/bots/:id`
+
+### Sources par bot
+
+- `GET /api/bots/:id/sources`
+- `POST /api/bots/:id/sources/text`
+- `POST /api/bots/:id/sources/pdf`
+- `POST /api/bots/:id/sources/api`
+- `PUT /api/bots/:id/sources/:sourceId`
+- `POST /api/bots/:id/sources/:sourceId/process`
+- `GET /api/bots/:id/sources/logs/api`
+
+### WhatsApp par bot
+
+- `POST /api/bots/:id/whatsapp/init`
+- `GET /api/bots/:id/whatsapp/status`
+- `GET /api/bots/:id/whatsapp/qr`
+- `POST /api/bots/:id/whatsapp/disconnect`
+- `POST /api/bots/:id/whatsapp/restart`
+
+### Conversations par bot
+
+- `GET /api/bots/:id/conversations`
+- `GET /api/bots/:id/conversations/:conversationId/messages`
+
+---
+
+## Guardrails IA (implémentés)
+
+Le service IA impose:
+
+- isolement strict par bot (`bot_id`),
+- réponse limitée au domaine du bot,
+- refus propre si la question semble hors domaine,
+- refus propre si l'information n'existe pas dans les chunks/sources du bot,
+- pas d'utilisation des sources d'un autre bot.
+
+---
+
+## Ancienne logique supprimée
+
+Retiré/abandonné:
+
+- `authorized_users`,
+- inscription/login user final web,
+- OTP SMS / Twilio,
+- QR d'authentification utilisateur final,
+- `qr_sessions`, `device_bindings`, `otp_challenges`,
+- flow scan QR -> session chat web.
+
+L'interface web est désormais centrée sur l'admin et la gestion de bots.
+
 # Marsa Maroc - Full Stack (PFE)
 
 Application web Marsa Maroc avec:

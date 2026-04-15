@@ -137,6 +137,3 @@ CREATE TABLE IF NOT EXISTS bot_api_logs (
     ON DELETE SET NULL
 );
 
-INSERT INTO admins (full_name, email, password_hash, role)
-SELECT 'Admin Marsa', 'admin@marsa.ma', 'Admin1234', 'super_admin'
-WHERE NOT EXISTS (SELECT 1 FROM admins WHERE email = 'admin@marsa.ma');
