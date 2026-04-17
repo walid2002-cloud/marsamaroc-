@@ -147,6 +147,13 @@ Base: `/api`
 - `PATCH /api/bots/:id/status`
 - `DELETE /api/bots/:id`
 
+### Suggestions par bot (meta keys)
+
+- `GET /api/bots/:id/suggestions`
+- `POST /api/bots/:id/suggestions`
+- `PUT /api/bots/:id/suggestions/:suggestionId`
+- `DELETE /api/bots/:id/suggestions/:suggestionId`
+
 ### Sources par bot
 
 - `GET /api/bots/:id/sources`
@@ -159,11 +166,19 @@ Base: `/api`
 
 ### WhatsApp par bot
 
-- `POST /api/bots/:id/whatsapp/init`
-- `GET /api/bots/:id/whatsapp/status`
-- `GET /api/bots/:id/whatsapp/qr`
-- `POST /api/bots/:id/whatsapp/disconnect`
-- `POST /api/bots/:id/whatsapp/restart`
+- `POST /api/bots/:id/whatsapp/init` — lancer le client WhatsApp (affiche un QR)
+- `GET /api/bots/:id/whatsapp/status` — statut courant (connected / qr_ready / error…)
+- `GET /api/bots/:id/whatsapp/qr` — QR seul (data-URL)
+- `POST /api/bots/:id/whatsapp/disconnect` — détruire le client proprement
+- `POST /api/bots/:id/whatsapp/reset-session` — disconnect + suppression du dossier de session locale (force un nouveau QR au prochain init)
+- `POST /api/bots/:id/whatsapp/restart` — disconnect + re-init (si pas connecté, supprime aussi la session locale)
+
+Le bot envoie automatiquement les suggestions si le message entrant est:
+
+- première interaction,
+- vide,
+- `bonjour` / `hello` / `hi`,
+- `aide` / `help` / `?`.
 
 ### Conversations par bot
 
@@ -418,6 +433,70 @@ docker push walidboudarra/marsa-maroc-backend:latest
 ```bash
 docker run --rm -p 3000:3000 walidboudarra/marsa-maroc-backend:latest
 ```
+
+## WhatsApp / Chromium / Docker — Troubleshooting
+
+### Architecture des sessions
+
+Chaque bot possède son propre dossier de session Chromium / WhatsApp Web :
+
+```
+/app/.wwebjs_auth/
+  session-bot-1-commerce/     ← bot id=1, slug=commerce
+  session-bot-2-logistique/   ← bot id=2, slug=logistique
+```
+
+Le `clientId` passé à `LocalAuth` est `bot-{id}-{slug}` : **un profil Chromium par bot**, jamais partagé.
+
+### Erreur « profile appears to be in use by another Chromium process »
+
+**Cause** : Chromium écrit des fichiers de verrouillage (`SingletonLock`, `SingletonSocket`, `SingletonCookie`) dans le profil. Quand le conteneur Docker redémarre, le volume persistant conserve ces fichiers qui référencent l'ancien hostname/PID → Chromium refuse de démarrer.
+
+**Ce que fait le backend automatiquement** :
+
+1. Au démarrage (`restoreTrackedSessions`) : `pkill chromium` + suppression de tous les fichiers de lock dans tous les dossiers `session-*`.
+2. Avant chaque `initBot` : destruction du client existant (avec timeout), puis nettoyage des locks du bot concerné.
+3. Si `initialize()` échoue à cause d'un lock : une seule relance automatique après cleanup.
+4. Verrou applicatif (`_initLocks`) : empêche deux initialisations simultanées du même bot.
+
+**Si le problème persiste (rare)** :
+
+```bash
+# Option 1 : restart propre
+docker compose down && docker compose up -d
+
+# Option 2 : supprimer le volume des sessions (perd les sessions WA locales, pas les bots en DB)
+docker compose down
+docker volume rm marsamaroc-_backend_whatsapp_auth
+docker compose up -d
+
+# Option 3 : depuis l'admin, cliquer « Oublier numéro » (supprime le dossier de session du bot)
+# puis « Connecter WhatsApp » pour un nouveau QR
+```
+
+### Le QR ne s'affiche pas
+
+Le QR est généré de façon **asynchrone** : le backend lance Chromium, puis WhatsApp Web émet un événement `qr` quelques secondes plus tard. Le frontend interroge `/status` en boucle (polling) pendant la phase `initializing` et affiche le QR dès `qr_ready`.
+
+Si ça ne vient pas :
+- vérifier les logs backend : `docker compose logs -f backend`
+- si `error` en base : « Rafraîchir QR » (restart = destroy + cleanup + re-init)
+- en dernier recours : « Oublier numéro » puis « Connecter WhatsApp »
+
+### Configuration Docker requise
+
+- **`shm_size: "512mb"`** dans `docker-compose.yml` : Chromium utilise `/dev/shm` (64 MB par défaut dans Docker = crash).
+- **`PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium`** : utilise le Chromium système installé dans le Dockerfile, pas un téléchargement Puppeteer.
+- **Volume `backend_whatsapp_auth`** monté sur `/app/.wwebjs_auth` : persiste les sessions entre redémarrages.
+- **`procps`** installé dans le Dockerfile : nécessaire pour `pkill` au cleanup.
+
+### Dissocier un numéro WhatsApp
+
+1. Dans l'admin : **Oublier numéro** (supprime la session locale + le profil Chromium du bot).
+2. Sur le **téléphone** : WhatsApp → Appareils connectés → supprimer l'appareil.
+3. **Connecter WhatsApp** avec le nouveau numéro : scanner le QR.
+
+---
 
 ## 10) Depannage rapide
 

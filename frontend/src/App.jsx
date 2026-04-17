@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import { getApiBaseUrl } from "./api";
 import {
   BookOpen,
+  Eraser,
   History,
   LayoutDashboard,
   LogOut,
@@ -34,12 +35,28 @@ async function requestJson(url, options = {}) {
   return response.json();
 }
 
+/** Le QR est poussé en base de façon asynchrone après /init ; on interroge le statut jusqu’à qr_ready / connected / error. */
+async function pollWhatsappUntilSettled(botId, setWhatsappByBotId) {
+  const maxAttempts = 60;
+  const delayMs = 1500;
+  for (let i = 0; i < maxAttempts; i++) {
+    const status = await requestJson(`${API_BASE_URL}/api/bots/${botId}/whatsapp/status`);
+    setWhatsappByBotId((prev) => ({ ...prev, [botId]: status }));
+    if (status.sessionStatus !== "initializing") {
+      return status;
+    }
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return null;
+}
+
 function BotCard({
   bot,
   whatsappStatus,
   onInit,
   onRestart,
   onDisconnect,
+  onResetSession,
   onSelect,
   selected,
 }) {
@@ -66,9 +83,17 @@ function BotCard({
         <Button type="button" variant="danger" icon={<Unplug size={15} />} onClick={() => onDisconnect(bot.id)}>
           Déconnecter
         </Button>
+        <Button
+          type="button"
+          variant="danger"
+          icon={<Eraser size={15} />}
+          onClick={() => onResetSession(bot.id)}
+        >
+          Oublier numéro
+        </Button>
       </div>
 
-      {whatsappStatus?.phoneNumber ? (
+      {whatsappStatus?.sessionStatus === "connected" && whatsappStatus?.phoneNumber ? (
         <p className="muted">Numéro connecté : {whatsappStatus.phoneNumber}</p>
       ) : null}
 
@@ -101,6 +126,16 @@ function App() {
   const [messages, setMessages] = useState([]);
   const [selectedConversationId, setSelectedConversationId] = useState(null);
   const [apiLogs, setApiLogs] = useState([]);
+  const [suggestions, setSuggestions] = useState([]);
+  const [newSuggestionForm, setNewSuggestionForm] = useState({
+    questionText: "",
+    category: "",
+  });
+  const [editingSuggestionId, setEditingSuggestionId] = useState(null);
+  const [editingSuggestionForm, setEditingSuggestionForm] = useState({
+    questionText: "",
+    category: "",
+  });
   const [botForm, setBotForm] = useState({
     name: "",
     slug: "",
@@ -176,6 +211,12 @@ function App() {
     setApiLogs(rows);
   };
 
+  const loadSuggestions = async (botId) => {
+    if (!botId) return;
+    const rows = await requestJson(`${API_BASE_URL}/api/bots/${botId}/suggestions`);
+    setSuggestions(rows);
+  };
+
   useEffect(() => {
     if (!adminAuth) return;
     (async () => {
@@ -193,6 +234,7 @@ function App() {
     loadSources(selectedBotId).catch((err) => setError(err.message));
     loadConversations(selectedBotId).catch((err) => setError(err.message));
     loadApiLogs(selectedBotId).catch((err) => setError(err.message));
+    loadSuggestions(selectedBotId).catch((err) => setError(err.message));
   }, [selectedBotId, adminAuth]);
 
   const handleAdminLogin = async (event) => {
@@ -263,7 +305,18 @@ function App() {
     try {
       await requestJson(`${API_BASE_URL}/api/bots/${botId}/whatsapp/init`, { method: "POST" });
       await loadWhatsappStatusForBot(botId);
-      setMessage("Session WhatsApp initialisée.");
+      const settled = await pollWhatsappUntilSettled(botId, setWhatsappByBotId);
+      if (settled?.sessionStatus === "qr_ready") {
+        setMessage("Scannez le QR avec l’application WhatsApp (menu ⋮ → Appareils connectés).");
+      } else if (settled?.sessionStatus === "connected") {
+        setMessage("WhatsApp est déjà connecté pour ce bot.");
+      } else if (settled?.sessionStatus === "error") {
+        setError(settled.errorMessage || "Erreur WhatsApp.");
+      } else if (!settled) {
+        setError(
+          "Délai dépassé sans QR. Cliquez « Rafraîchir QR » (réinitialise la session locale) ou « Oublier numéro » puis reconnectez."
+        );
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -275,7 +328,18 @@ function App() {
     try {
       await requestJson(`${API_BASE_URL}/api/bots/${botId}/whatsapp/restart`, { method: "POST" });
       await loadWhatsappStatusForBot(botId);
-      setMessage("Session WhatsApp redémarrée.");
+      const settled = await pollWhatsappUntilSettled(botId, setWhatsappByBotId);
+      if (settled?.sessionStatus === "qr_ready") {
+        setMessage("Nouveau QR prêt — scannez-le avec WhatsApp.");
+      } else if (settled?.sessionStatus === "connected") {
+        setMessage("Session WhatsApp reconnectée.");
+      } else if (settled?.sessionStatus === "error") {
+        setError(settled.errorMessage || "Erreur WhatsApp.");
+      } else if (!settled) {
+        setError(
+          "Délai dépassé sans QR. Réessayez ou utilisez « Oublier numéro » puis « Connecter WhatsApp »."
+        );
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -290,6 +354,27 @@ function App() {
       });
       await loadWhatsappStatusForBot(botId);
       setMessage("Session WhatsApp déconnectée.");
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleWhatsappResetSession = async (botId) => {
+    if (
+      !window.confirm(
+        "Supprimer le numéro enregistré et les fichiers de session sur le serveur ? Vous pourrez ensuite connecter un autre numéro (nouveau QR). Sur le téléphone, déliez aussi l’appareil dans WhatsApp → Appareils connectés si besoin."
+      )
+    ) {
+      return;
+    }
+    setError("");
+    setMessage("");
+    try {
+      await requestJson(`${API_BASE_URL}/api/bots/${botId}/whatsapp/reset-session`, {
+        method: "POST",
+      });
+      await loadWhatsappStatusForBot(botId);
+      setMessage("Session réinitialisée. Utilisez « Connecter WhatsApp » pour un nouveau QR.");
     } catch (err) {
       setError(err.message);
     }
@@ -380,6 +465,81 @@ function App() {
   const handleSelectConversation = async (conversationId) => {
     setSelectedConversationId(conversationId);
     await loadMessages(selectedBotId, conversationId);
+  };
+
+  const handleCreateSuggestion = async (event) => {
+    event.preventDefault();
+    if (!selectedBotId) return;
+    const questionText = String(newSuggestionForm.questionText || "").trim();
+    if (!questionText) return;
+    setError("");
+    setMessage("");
+    try {
+      await requestJson(`${API_BASE_URL}/api/bots/${selectedBotId}/suggestions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionText,
+          category: String(newSuggestionForm.category || "").trim() || null,
+        }),
+      });
+      setNewSuggestionForm({ questionText: "", category: "" });
+      await loadSuggestions(selectedBotId);
+      setMessage("Suggestion ajoutée.");
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const startEditSuggestion = (item) => {
+    setEditingSuggestionId(item.id);
+    setEditingSuggestionForm({
+      questionText: item.questionText || "",
+      category: item.category || "",
+    });
+  };
+
+  const cancelEditSuggestion = () => {
+    setEditingSuggestionId(null);
+    setEditingSuggestionForm({ questionText: "", category: "" });
+  };
+
+  const handleUpdateSuggestion = async (suggestionId) => {
+    if (!selectedBotId) return;
+    const questionText = String(editingSuggestionForm.questionText || "").trim();
+    if (!questionText) return;
+    setError("");
+    setMessage("");
+    try {
+      await requestJson(`${API_BASE_URL}/api/bots/${selectedBotId}/suggestions/${suggestionId}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          questionText,
+          category: String(editingSuggestionForm.category || "").trim() || null,
+        }),
+      });
+      cancelEditSuggestion();
+      await loadSuggestions(selectedBotId);
+      setMessage("Suggestion mise à jour.");
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const handleDeleteSuggestion = async (suggestionId) => {
+    if (!selectedBotId) return;
+    setError("");
+    setMessage("");
+    try {
+      await requestJson(`${API_BASE_URL}/api/bots/${selectedBotId}/suggestions/${suggestionId}`, {
+        method: "DELETE",
+      });
+      await loadSuggestions(selectedBotId);
+      setMessage("Suggestion supprimée.");
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   const sidebar = (
@@ -504,6 +664,7 @@ function App() {
                     onInit={handleWhatsappInit}
                     onRestart={handleWhatsappRestart}
                     onDisconnect={handleWhatsappDisconnect}
+                    onResetSession={handleWhatsappResetSession}
                   />
                 ))}
                 {selectedBot && (
@@ -521,6 +682,137 @@ function App() {
                   </div>
                 )}
               </div>
+            )}
+          </Card>
+
+          <Card
+            title="Suggestions de questions"
+            subtitle="Ces questions sont utilisées comme meta keys dans le bot WhatsApp."
+          >
+            <label>
+              Bot ciblé
+              <select
+                value={selectedBotId || ""}
+                onChange={(e) => setSelectedBotId(Number(e.target.value) || null)}
+              >
+                <option value="">-- Sélectionner --</option>
+                {bots.map((bot) => (
+                  <option key={bot.id} value={bot.id}>
+                    {bot.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {!selectedBotId ? (
+              <EmptyState title="Sélectionnez un bot pour gérer ses suggestions." />
+            ) : (
+              <>
+                <form className="form" onSubmit={handleCreateSuggestion}>
+                  <label>
+                    Question suggérée
+                    <input
+                      value={newSuggestionForm.questionText}
+                      onChange={(e) =>
+                        setNewSuggestionForm((p) => ({ ...p, questionText: e.target.value }))
+                      }
+                      placeholder="Ex: Quels sont les délais de dédouanement ?"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Catégorie (optionnel)
+                    <input
+                      value={newSuggestionForm.category}
+                      onChange={(e) =>
+                        setNewSuggestionForm((p) => ({ ...p, category: e.target.value }))
+                      }
+                      placeholder="Ex: Douane"
+                    />
+                  </label>
+                  <Button type="submit">Ajouter suggestion</Button>
+                </form>
+
+                <div className="users-grid" style={{ marginTop: 12 }}>
+                  {suggestions.length === 0 ? (
+                    <EmptyState
+                      title="Aucune suggestion configurée."
+                      subtitle="Le bot utilisera un message d'aide générique."
+                    />
+                  ) : (
+                    suggestions.map((item) => (
+                      <article key={item.id} className="user-item">
+                        {editingSuggestionId === item.id ? (
+                          <>
+                            <label>
+                              Question
+                              <input
+                                value={editingSuggestionForm.questionText}
+                                onChange={(e) =>
+                                  setEditingSuggestionForm((p) => ({
+                                    ...p,
+                                    questionText: e.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <label>
+                              Catégorie
+                              <input
+                                value={editingSuggestionForm.category}
+                                onChange={(e) =>
+                                  setEditingSuggestionForm((p) => ({
+                                    ...p,
+                                    category: e.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <Button
+                                type="button"
+                                onClick={() => handleUpdateSuggestion(item.id)}
+                              >
+                                Sauvegarder
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={cancelEditSuggestion}
+                              >
+                                Annuler
+                              </Button>
+                            </div>
+                          </>
+                        ) : (
+                          <>
+                            <p>
+                              <strong>{item.questionText}</strong>
+                            </p>
+                            <p className="muted">Catégorie: {item.category || "-"}</p>
+                            <div style={{ display: "flex", gap: 8 }}>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                onClick={() => startEditSuggestion(item)}
+                              >
+                                Modifier
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="danger"
+                                onClick={() => handleDeleteSuggestion(item.id)}
+                              >
+                                Supprimer
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </article>
+                    ))
+                  )}
+                </div>
+              </>
             )}
           </Card>
         </>

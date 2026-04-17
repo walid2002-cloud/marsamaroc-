@@ -137,6 +137,19 @@ CREATE TABLE IF NOT EXISTS bot_api_logs (
     ON DELETE SET NULL
 );
 
+CREATE TABLE IF NOT EXISTS bot_suggestions (
+  id BIGINT AUTO_INCREMENT PRIMARY KEY,
+  bot_id INT NOT NULL,
+  question_text VARCHAR(500) NOT NULL,
+  category VARCHAR(120) NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_bot_suggestions_bot (bot_id),
+  CONSTRAINT fk_bot_suggestions_bot
+    FOREIGN KEY (bot_id) REFERENCES bots(id)
+    ON DELETE CASCADE
+);
+
 INSERT INTO admins (full_name, email, password_hash, role)
 SELECT 'Admin Marsa', 'admin@marsa.ma', 'Admin1234', 'super_admin'
 WHERE NOT EXISTS (SELECT 1 FROM admins WHERE email = 'admin@marsa.ma');

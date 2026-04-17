@@ -12,7 +12,7 @@ async function findOrCreateConversation(botId, contactPhone, contactName = null)
        WHERE id = ?`,
       [contactName, rows[0].id]
     );
-    return rows[0].id;
+    return { conversationId: rows[0].id, isNewConversation: false };
   }
 
   const result = await dbQuery(
@@ -21,7 +21,7 @@ async function findOrCreateConversation(botId, contactPhone, contactName = null)
      VALUES (?, ?, ?, NOW(), NOW(), NOW(), NOW())`,
     [botId, contactPhone, contactName]
   );
-  return result.insertId;
+  return { conversationId: result.insertId, isNewConversation: true };
 }
 
 async function addMessage(payload) {

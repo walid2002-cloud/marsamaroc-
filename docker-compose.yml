@@ -23,6 +23,8 @@ services:
       dockerfile: Dockerfile
     container_name: marsa-backend
     restart: unless-stopped
+    # Chromium in Docker needs more shared memory than the default 64MB
+    shm_size: "512mb"
     environment:
       PORT: 3000
       DB_HOST: mysql
@@ -32,6 +34,7 @@ services:
       DB_NAME: marsa_ai
       LLAMA_CPP_URL: http://host.docker.internal:8080
       NODE_ENV: ${NODE_ENV:-development}
+      PUPPETEER_EXECUTABLE_PATH: /usr/bin/chromium
       WWEBJS_AUTH_PATH: /app/.wwebjs_auth
       UPLOAD_DIR: /app/uploads/bot-sources
     ports:
@@ -50,7 +53,6 @@ services:
     container_name: marsa-frontend
     restart: unless-stopped
     environment:
-      # Cible du proxy Vite /api → backend (nom du service Docker)
       DEV_PROXY_TARGET: http://backend:3000
     ports:
       - "5173:5173"

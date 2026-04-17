@@ -44,6 +44,16 @@ async function disconnectWhatsappHandler(req, res, next) {
   }
 }
 
+async function resetWhatsappSessionHandler(req, res, next) {
+  try {
+    const botId = Number(req.params.id);
+    const status = await botWhatsappManager.resetWhatsappSession(botId);
+    return res.status(200).json(status);
+  } catch (err) {
+    return next(err);
+  }
+}
+
 async function restartWhatsappHandler(req, res, next) {
   try {
     const botId = Number(req.params.id);
@@ -59,6 +69,7 @@ module.exports = {
   statusWhatsappHandler,
   qrWhatsappHandler,
   disconnectWhatsappHandler,
+  resetWhatsappSessionHandler,
   restartWhatsappHandler,
 };
 

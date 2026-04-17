@@ -4,6 +4,7 @@ const {
   statusWhatsappHandler,
   qrWhatsappHandler,
   disconnectWhatsappHandler,
+  resetWhatsappSessionHandler,
   restartWhatsappHandler,
 } = require("../controllers/whatsappController");
 
@@ -13,6 +14,7 @@ router.post("/init", initWhatsappHandler);
 router.get("/status", statusWhatsappHandler);
 router.get("/qr", qrWhatsappHandler);
 router.post("/disconnect", disconnectWhatsappHandler);
+router.post("/reset-session", resetWhatsappSessionHandler);
 router.post("/restart", restartWhatsappHandler);
 
 module.exports = router;

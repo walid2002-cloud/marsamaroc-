@@ -2,6 +2,7 @@ FROM node:18
 
 WORKDIR /app
 
+# Chromium + all runtime libs required by Puppeteer in headless mode
 RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     fonts-liberation \
@@ -21,6 +22,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxfixes3 \
     libxrandr2 \
     xdg-utils \
+    procps \
     chromium \
   && rm -rf /var/lib/apt/lists/*
 
@@ -29,9 +31,13 @@ RUN npm install
 
 COPY . .
 
+# Tell Puppeteer to use the system-installed Chromium instead of downloading its own
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
 ENV WWEBJS_AUTH_PATH=/app/.wwebjs_auth
-RUN mkdir -p /app/.wwebjs_auth /app/uploads/bot-sources
+
+RUN mkdir -p /app/.wwebjs_auth /app/uploads/bot-sources \
+  && chmod -R 777 /app/.wwebjs_auth
 
 EXPOSE 3000
 
