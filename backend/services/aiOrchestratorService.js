@@ -58,9 +58,14 @@ ${question}
 }
 
 async function askLlama(prompt) {
-  if (!LLAMA_CPP_URL) return null;
+  if (!LLAMA_CPP_URL) {
+    console.warn("[ai] LLAMA_CPP_URL is not set — skipping model call");
+    return null;
+  }
+  const url = `${LLAMA_CPP_URL}/completion`;
   try {
-    const response = await fetch(`${LLAMA_CPP_URL}/completion`, {
+    console.log(`[ai] calling ${url} (prompt length: ${prompt.length})`);
+    const response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -70,10 +75,17 @@ async function askLlama(prompt) {
         stop: ["</s>"],
       }),
     });
-    if (!response.ok) return null;
+    if (!response.ok) {
+      const body = await response.text().catch(() => "");
+      console.error(`[ai] llama returned HTTP ${response.status}: ${body.slice(0, 200)}`);
+      return null;
+    }
     const data = await response.json();
-    return String(data.content || data.response || "").trim() || null;
-  } catch {
+    const text = String(data.content || data.response || "").trim() || null;
+    console.log(`[ai] llama response (${text ? text.length : 0} chars): ${(text || "").slice(0, 120)}...`);
+    return text;
+  } catch (err) {
+    console.error("[ai] llama fetch error:", err.message);
     return null;
   }
 }

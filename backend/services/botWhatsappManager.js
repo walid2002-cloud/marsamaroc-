@@ -62,6 +62,11 @@ const SINGLETON_ERROR_RE =
 const RECOVERABLE_RESTORE_RE =
   /restore failed|profile appears to be in use|ProcessSingleton|Failed to launch the browser|SingletonLock/i;
 
+/** Check if a path exists as a file, symlink (even broken), or anything. */
+function pathExistsRaw(p) {
+  try { fs.lstatSync(p); return true; } catch { return false; }
+}
+
 function removeLockFile(filePath) {
   try { fs.chmodSync(filePath, 0o666); } catch (_) { /* ignore */ }
   try { fs.unlinkSync(filePath); } catch (_) { /* ignore */ }
@@ -73,13 +78,13 @@ function cleanSessionLocks(sessionDir) {
   let cleaned = 0;
   for (const name of CHROMIUM_LOCK_FILES) {
     const fp = path.join(sessionDir, name);
-    if (fs.existsSync(fp)) {
+    if (pathExistsRaw(fp)) {
       removeLockFile(fp);
       cleaned++;
     }
     const defaultSubDir = path.join(sessionDir, "Default");
     const fpSub = path.join(defaultSubDir, name);
-    if (fs.existsSync(fpSub)) {
+    if (pathExistsRaw(fpSub)) {
       removeLockFile(fpSub);
       cleaned++;
     }
@@ -383,6 +388,7 @@ class BotWhatsappManager {
     const contactName = message._data?.notifyName || null;
     const text = String(message.body || "").trim();
     const userTextToStore = text || "(message vide)";
+    log(botId, `incoming from ${contactPhone}: "${text.slice(0, 80)}"`);
 
     const { conversationId, isNewConversation } = await findOrCreateConversation(
       botId,
@@ -404,16 +410,22 @@ class BotWhatsappManager {
     });
 
     if (shouldSuggest) {
+      log(botId, "→ sending suggestions reply");
       const suggested = await generateSuggestionsReply(botId, bot.name);
       replyText = suggested.text;
     } else {
+      log(botId, "→ calling AI orchestrator...");
       const reply = await generateReplyForBot(botId, text);
+      log(botId, `→ AI reply status=${reply.status}, length=${(reply.text || "").length}`);
       replyText = reply.text || "Je ne dispose pas de cette information dans mes sources.";
     }
 
     const client = this.clients.get(botId);
     if (client) {
       await client.sendMessage(message.from, replyText);
+      log(botId, `→ sent reply (${replyText.length} chars)`);
+    } else {
+      logWarn(botId, "no client to send reply");
     }
 
     await addMessage({
