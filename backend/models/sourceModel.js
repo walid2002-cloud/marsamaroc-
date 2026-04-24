@@ -90,6 +90,7 @@ async function replaceChunks(botId, sourceId, chunks) {
     chunk,
     idx + 1,
     JSON.stringify({ length: chunk.length }),
+    new Date(),
   ]);
   await dbQuery(
     `INSERT INTO bot_knowledge_chunks
